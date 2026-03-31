@@ -1,0 +1,15 @@
+skill,resource,level,type,link
+python,Python for Everybody - Coursera,Beginner,Course,https://www.coursera.org/specializations/python
+python,Python Crash Course - YouTube,Beginner,Video,https://www.youtube.com/watch?v=rfscVS0vtbw
+python,Advanced Python Programming - Udemy,Advanced,Course,https://www.udemy.com/
+sql,SQL for Data Science - Coursera,Beginner,Course,https://www.coursera.org/learn/sql-for-data-science
+sql,SQL Tutorial - W3Schools,Beginner,Docs,https://www.w3schools.com/sql/
+machine learning,Machine Learning by Andrew Ng,Beginner,Course,https://www.coursera.org/learn/machine-learning
+machine learning,ML Crash Course - Google,Intermediate,Course,https://developers.google.com/machine-learning/crash-course
+deep learning,Deep Learning Specialization,Intermediate,Course,https://www.coursera.org/specializations/deep-learning
+data analysis,Data Analysis with Python - IBM,Beginner,Course,https://www.coursera.org/learn/data-analysis-with-python
+nlp,NLP Specialization - Coursera,Intermediate,Course,https://www.coursera.org/specializations/natural-language-processing
+react,React Official Docs,Beginner,Docs,https://react.dev/
+javascript,JavaScript Essentials,Beginner,Course,https://www.freecodecamp.org/
+html,HTML Basics - freeCodeCamp,Beginner,Course,https://www.freecodecamp.org/
+css,CSS Basics - freeCodeCamp,Beginner,Course,https://www.freecodecamp.org/
