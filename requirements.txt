@@ -1,0 +1,8 @@
+streamlit
+pandas
+PyPDF2
+scikit-learn
+matplotlib
+numpy
+sqlalchemy
+passlib

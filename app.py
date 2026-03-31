@@ -7,6 +7,7 @@ import numpy as np
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from db import init_db, Session, import_csvs, log_search
 
 # ---------------- CONFIG ---------------- #
 st.set_page_config(page_title="SkillGap AI", layout="wide")
@@ -18,11 +19,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------- LOAD DATA ---------------- #
-jobs = pd.read_csv("job_title_des.csv")
-jobs = jobs[['Job Title', 'Job Description']]
-jobs.dropna(inplace=True)
+# initialize DB and session
+init_db()
+db_session = Session()
 
-courses = pd.read_csv("courses.csv")
+# prefer DB tables if present, otherwise fall back to CSVs (import_csvs can be run once)
+try:
+    jobs = pd.read_sql('SELECT title AS "Job Title", description AS "Job Description" FROM jobs', db_session.bind)
+    courses = pd.read_sql('SELECT * FROM courses', db_session.bind)
+    if jobs.empty:
+        raise Exception("empty")
+except Exception:
+    jobs = pd.read_csv("job_title_des.csv")
+    jobs = jobs[['Job Title', 'Job Description']]
+    jobs.dropna(inplace=True)
+    courses = pd.read_csv("courses.csv")
 
 # ---------------- CLEAN TEXT ---------------- #
 def clean_text(text):
@@ -229,6 +240,25 @@ if st.button("🚀 Analyze"):
         st.subheader("🎤 Interview Questions")
         for q in generate_questions(missing):
             st.write("👉", q)
+
+        # ---------------- LOG TO DB ---------------- #
+        try:
+            log_search(
+                db_session,
+                user_id=None,
+                resume_id=None,
+                query_text=resume,
+                job_text=job_input,
+                fraud_flag=fraud,
+                similarity=sim,
+                matched_skills=list(matched),
+                missing_skills=list(missing),
+                prob=prob,
+                ats=ats,
+                final_score=final
+            )
+        except Exception as e:
+            st.warning(f"Failed to write log to DB: {e}")
 
     else:
         st.warning("Please upload resume or enter text!")
