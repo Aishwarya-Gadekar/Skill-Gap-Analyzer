@@ -13,7 +13,7 @@ st.set_page_config(page_title="SkillGap AI", layout="wide")
 
 st.markdown("""
 <h1 style='text-align: center; color: #4CAF50;'>
-🧠 SkillGap AI – AI Recruiter System
+🧠 SkillGap AI – AI Career & Recruiter System
 </h1>
 """, unsafe_allow_html=True)
 
@@ -44,7 +44,7 @@ skills_list = [
     "html", "css", "javascript"
 ]
 
-# ---------------- PDF READER ---------------- #
+# ---------------- PDF ---------------- #
 def extract_text_from_pdf(file):
     reader = PyPDF2.PdfReader(file)
     text = ""
@@ -53,7 +53,7 @@ def extract_text_from_pdf(file):
             text += page.extract_text()
     return text
 
-# ---------------- FUNCTIONS ---------------- #
+# ---------------- CORE FUNCTIONS ---------------- #
 
 def extract_skills(text):
     text = text.lower()
@@ -62,17 +62,12 @@ def extract_skills(text):
 def calculate_similarity(resume_text, job_text):
     texts = [clean_text(resume_text), clean_text(job_text)]
     vectors = vectorizer.transform(texts)
-    similarity = cosine_similarity(vectors[0], vectors[1])
-    return similarity[0][0]
+    return cosine_similarity(vectors[0], vectors[1])[0][0]
 
 def calculate_gap(student_skills, job_skills):
     student_set = set(student_skills)
     job_set = set(job_skills)
-    
-    matched = student_set & job_set
-    missing = job_set - student_set
-    
-    return matched, missing
+    return student_set & job_set, job_set - student_set
 
 def selection_probability(similarity, matched, missing):
     score = similarity * 60
@@ -82,36 +77,26 @@ def selection_probability(similarity, matched, missing):
 def ats_score(resume_text, job_text):
     resume_words = set(clean_text(resume_text).split())
     job_words = set(clean_text(job_text).split())
-    
     match = resume_words & job_words
-    score = (len(match) / len(job_words)) * 100 if job_words else 0
-    
-    return round(score, 2)
+    return round((len(match) / len(job_words)) * 100, 2) if job_words else 0
 
 def analyze_profile(matched, missing):
-    strengths = [f"Strong in {skill}" for skill in matched]
-    weaknesses = [f"Lacking {skill}" for skill in missing]
-    return strengths, weaknesses
+    return [f"Strong in {s}" for s in matched], [f"Lacking {s}" for s in missing]
 
 def recommend_courses(missing_skills):
     recommendations = {}
-    
     for skill in missing_skills:
         matches = courses[courses['skill'].str.lower() == skill]
-        
         if not matches.empty:
             recommendations[skill] = matches['resource'].tolist()
-    
     return recommendations
 
 def generate_questions(missing_skills):
-    questions = []
-    
+    q = []
     for skill in missing_skills:
-        questions.append(f"Explain your understanding of {skill}.")
-        questions.append(f"Have you worked on any project using {skill}?")
-    
-    return questions[:5]
+        q.append(f"Explain your understanding of {skill}.")
+        q.append(f"Have you worked on any project using {skill}?")
+    return q[:5]
 
 def final_score(prob, ats):
     return round((prob * 0.6 + ats * 0.4), 2)
@@ -124,102 +109,126 @@ def insights(score):
     else:
         return "Low chance. Significant skill gaps detected."
 
+def predict_role_from_resume(resume_text):
+    vec = vectorizer.transform([clean_text(resume_text)])
+    sim = cosine_similarity(vec, tfidf_matrix)
+    return jobs.iloc[sim.argmax()]['Job Title']
+
+# ---------------- FRAUD DETECTION ---------------- #
+
+def detect_fraud(job_text):
+    job_text = clean_text(job_text)
+
+    fraud_keywords = [
+        "earn money fast", "no experience required", "work from home",
+        "urgent hiring", "pay registration fee", "limited seats",
+        "guaranteed job", "easy money", "click here", "whatsapp only"
+    ]
+
+    score = sum(1 for word in fraud_keywords if word in job_text)
+
+    if len(job_text.split()) < 30:
+        score += 2
+
+    if score >= 3:
+        return "Fraudulent"
+    elif score == 2:
+        return "Suspicious"
+    else:
+        return "Safe"
+
+# ---------------- VISUAL ---------------- #
+
 def radar_chart(matched, missing):
     labels = ["Matched", "Missing"]
     values = [len(matched), len(missing)]
-    
+
     angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False)
-    
     values = np.concatenate((values,[values[0]]))
     angles = np.concatenate((angles,[angles[0]]))
-    
+
     fig, ax = plt.subplots(subplot_kw={'polar': True})
     ax.plot(angles, values)
     ax.fill(angles, values, alpha=0.25)
-    
+
     ax.set_thetagrids(angles[:-1] * 180/np.pi, labels)
-    
     st.pyplot(fig)
 
 # ---------------- UI ---------------- #
 
-st.subheader("📄 Upload Resume or Enter Skills")
-
-uploaded_file = st.file_uploader("Upload Resume (PDF)", type=["pdf"])
+uploaded_file = st.file_uploader("📄 Upload Resume", type=["pdf"])
 resume_text = st.text_area("OR paste resume text")
 
-job_input = st.text_area("📄 Paste Job Description")
+job_input = st.text_area("📄 Paste Job Description (optional)")
 
 if st.button("🚀 Analyze"):
-    
-    if uploaded_file:
-        resume = extract_text_from_pdf(uploaded_file)
-    else:
-        resume = resume_text
-    
-    if not resume.strip() or not job_input.strip():
-        st.warning("Please provide both resume and job description!")
-    
-    else:
-        # Processing
+
+    resume = extract_text_from_pdf(uploaded_file) if uploaded_file else resume_text
+
+    # ---------------- RESUME ONLY ---------------- #
+    if resume.strip() and not job_input.strip():
+
+        role = predict_role_from_resume(resume)
+        skills = extract_skills(resume)
+
+        st.subheader("🎯 Best Fit Role")
+        st.success(role)
+
+        st.subheader("🧠 Detected Skills")
+        st.write(skills)
+
+        st.info("Upload a job description to analyze selection chances.")
+
+    # ---------------- FULL MODE ---------------- #
+    elif resume.strip() and job_input.strip():
+
+        st.subheader("🛡️ Job Safety Check")
+        fraud = detect_fraud(job_input)
+
+        if fraud == "Fraudulent":
+            st.error("⚠️ This job looks FRAUDULENT")
+        elif fraud == "Suspicious":
+            st.warning("⚠️ This job looks SUSPICIOUS")
+        else:
+            st.success("✅ Job looks SAFE")
+
         student_skills = extract_skills(resume)
         job_skills = extract_skills(job_input)
-        
-        similarity = calculate_similarity(resume, job_input)
+
+        sim = calculate_similarity(resume, job_input)
         matched, missing = calculate_gap(student_skills, job_skills)
-        
-        prob = selection_probability(similarity, matched, missing)
+
+        prob = selection_probability(sim, matched, missing)
         ats = ats_score(resume, job_input)
         final = final_score(prob, ats)
-        
+
         strengths, weaknesses = analyze_profile(matched, missing)
-        recommendations = recommend_courses(missing)
-        questions = generate_questions(missing)
-        
-        # ---------------- OUTPUT ---------------- #
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.subheader("🎯 Selection Probability")
-            st.success(f"{prob}%")
-        
-        with col2:
-            st.subheader("📄 ATS Score")
-            st.info(f"{ats}%")
-        
-        with col3:
-            st.subheader("🏆 Final Score")
-            st.success(f"{final}%")
-        
-        st.subheader("💡 Insight")
+
+        st.subheader("📊 Scores")
+        st.write(f"Selection Probability: {prob}%")
+        st.write(f"ATS Score: {ats}%")
+        st.write(f"Final Score: {final}%")
+
         st.write(insights(final))
-        
-        st.divider()
-        
+
         st.subheader("💪 Strengths")
         for s in strengths:
-            st.write(f"✅ {s}")
-        
+            st.write("✅", s)
+
         st.subheader("⚠️ Weaknesses")
         for w in weaknesses:
-            st.write(f"❌ {w}")
-        
-        st.divider()
-        
-        st.subheader("📊 Skill Analysis")
+            st.write("❌", w)
+
         radar_chart(matched, missing)
-        
-        st.divider()
-        
-        st.subheader("📚 Recommended Resources")
-        for skill, res in recommendations.items():
-            st.write(f"🔹 {skill}")
-            for r in res:
-                st.write(f"   → {r}")
-        
-        st.divider()
-        
+
+        st.subheader("📚 Recommendations")
+        rec = recommend_courses(missing)
+        for skill, r in rec.items():
+            st.write(skill, "→", r)
+
         st.subheader("🎤 Interview Questions")
-        for q in questions:
-            st.write(f"👉 {q}")
+        for q in generate_questions(missing):
+            st.write("👉", q)
+
+    else:
+        st.warning("Please upload resume or enter text!")
